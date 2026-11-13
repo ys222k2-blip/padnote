@@ -34,6 +34,7 @@ export class Viewer {
     this.Y = [0];
     this.maxW = 1;
     this.scale = 1;
+    this.inset = 0; // 첫 페이지 위에 비워 둘 높이(상태 막대 아래로 내용이 들어가는 배치에서 사용)
     this.fit = true; // 폭 맞춤 상태(창 크기가 바뀌면 다시 맞춘다)
     this.dpr = 1;
     this.loaded = new Set();
@@ -139,20 +140,20 @@ export class Viewer {
     }
     this.maxW = maxW;
   }
-  top(i) { return PAD + i * GAP + this.scale * this.Y[i]; }
+  top(i) { return PAD + this.inset + i * GAP + this.scale * this.Y[i]; }
   contentWidth() { return Math.max(this.scroller.clientWidth, this.scale * this.maxW + 2 * PAD); }
   left(i) { return (this.contentWidth() - this.scale * this.views[i].w) / 2; }
-  totalHeight() { return 2 * PAD + Math.max(0, this.n - 1) * GAP + this.scale * this.Y[this.n]; }
+  totalHeight() { return 2 * PAD + this.inset + Math.max(0, this.n - 1) * GAP + this.scale * this.Y[this.n]; }
 
   applyLayout(full = false) {
     const st = this.pagesEl.style;
     st.setProperty('--s', String(this.scale));
-    st.height = `calc(var(--s) * ${this.Y[this.n]}px + ${2 * PAD + Math.max(0, this.n - 1) * GAP}px)`;
+    st.height = `calc(var(--s) * ${this.Y[this.n]}px + ${2 * PAD + this.inset + Math.max(0, this.n - 1) * GAP}px)`;
     st.width = `max(100%, calc(var(--s) * ${this.maxW}px + ${2 * PAD}px))`;
     if (!full) return;
     for (const pv of this.views) {
       const s = pv.el.style;
-      s.top = `calc(var(--s) * ${this.Y[pv.i]}px + ${PAD + pv.i * GAP}px)`;
+      s.top = `calc(var(--s) * ${this.Y[pv.i]}px + ${PAD + this.inset + pv.i * GAP}px)`;
       s.width = `calc(var(--s) * ${pv.w}px)`;
       s.height = `calc(var(--s) * ${pv.h}px)`;
     }
@@ -165,8 +166,22 @@ export class Viewer {
   minScale() {
     const pv = this.views[Math.max(0, this.current)];
     if (!pv) return 0.1;
-    const whole = Math.min(this.fitScale(), (this.scroller.clientHeight - 2 * PAD) / pv.h);
+    const whole = Math.min(this.fitScale(), (this.scroller.clientHeight - this.inset - 2 * PAD) / pv.h);
     return Math.max(0.1, whole * 0.5);
+  }
+
+  /** 첫 페이지 위 여백을 바꾼다(보고 있던 위치는 유지). */
+  setInset(px) {
+    if (px === this.inset) return;
+    if (!this.pdf || !this.views.length) { this.inset = px; return; }
+    const r = this.scroller.getBoundingClientRect();
+    const anchor = this.anchorAt(r.left + r.width / 2, r.top);
+    const atTop = this.scroller.scrollTop <= 1;
+    this.inset = px;
+    this.applyLayout(true);
+    this.scroller.scrollTop = atTop ? 0 : this.top(anchor.i) + anchor.fy * this.views[anchor.i].h * this.scale;
+    this.onLiveInvalidate?.();
+    this.update();
   }
 
   onResize() {
@@ -267,7 +282,7 @@ export class Viewer {
   }
   scrollToPage(i) {
     if (!this.n) return;
-    this.scroller.scrollTop = this.top(clamp(i, 0, this.n - 1)) - PAD / 2;
+    this.scroller.scrollTop = this.top(clamp(i, 0, this.n - 1)) - this.inset - PAD / 2;
     this.update();
   }
   /** 페이지 좌표 (x,y)가 화면 안쪽에 오도록 필요할 때만 스크롤한다(재생 따라가기). */

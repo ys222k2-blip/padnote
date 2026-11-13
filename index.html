@@ -107,9 +107,17 @@
       <button type="button" role="radio" data-v="3">강</button>
     </div>
   </div>
+  <div class="opt col">
+    <span><b>도구 막대 위치</b></span>
+    <div id="opt-bar" class="choice" role="radiogroup" aria-label="도구 막대 위치">
+      <button type="button" role="radio" data-v="bottom">아래</button>
+      <button type="button" role="radio" data-v="top">위</button>
+    </div>
+  </div>
   <button id="refresh-btn" type="button" class="opt-btn"><b>새로고침</b><small>최신 버전을 받아 앱을 다시 불러옵니다</small></button>
 </div>
 
+<div id="sat-probe" aria-hidden="true"></div>
 <div id="busy" hidden><div class="spinner"></div><span id="busy-text"></span></div>
 <div id="toast" role="status" aria-live="polite"></div>
 

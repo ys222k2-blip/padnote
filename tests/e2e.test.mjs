@@ -95,6 +95,25 @@ try {
   assert.equal(await state(page, () => __padnote.viewer.n), 3);
   ok('3쪽 문서가 렌더링됨');
 
+  step = '도구 막대 위치';
+  const bars = () => state(page, () => {
+    const t = document.getElementById('toolbar').getBoundingClientRect(), s = document.getElementById('stage').getBoundingClientRect();
+    return { t: [t.top, t.bottom], s: [s.top, s.bottom], h: innerHeight };
+  });
+  let bar = await bars();
+  assert.deepEqual([bar.t[1], bar.s[0], bar.s[1]], [bar.h, 0, bar.t[0]], '기본은 아래: 문서가 화면 맨 위부터');
+  await page.click('#settings-btn');
+  const popBox = await state(page, () => { const r = document.getElementById('settings-pop').getBoundingClientRect(); return [r.top, r.bottom]; });
+  assert.ok(popBox[0] >= 8 && popBox[1] <= bar.t[0], '설정창은 아래 도구 막대 위로 열림');
+  await page.click('#opt-bar [data-v="top"]');
+  bar = await bars();
+  assert.deepEqual([bar.t[0], bar.s[0], bar.s[1]], [0, bar.t[1], bar.h], '위로 옮기면 도구 막대 아래부터');
+  await page.click('#opt-bar [data-v="bottom"]');
+  await page.click('#settings-btn');
+  bar = await bars();
+  assert.equal(bar.t[1], bar.h);
+  ok('도구 막대 아래(기본)/위 전환');
+
   step = '펜·형광펜';
   await drag(page, [[300, 300], [380, 260], [460, 330], [540, 300]]);
   await page.keyboard.press('h');

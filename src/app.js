@@ -71,6 +71,7 @@ const settings = {
   swipeErase: false, // 한 손가락 가로 쓸기를 지우개로
   pressure: false, // 필압을 굵기에 반영
   smooth: 2, // 획 보정: 0 끔 · 1 약 · 2 보통 · 3 강
+  barPos: 'bottom', // 도구 막대 위치: 'bottom' | 'top'
   speed: 1,
   skip: true,
   hinted: false,
@@ -317,7 +318,11 @@ function showSizePopover() {
 function placePopover(pop, anchor) {
   pop.hidden = false;
   const r = anchor.getBoundingClientRect();
-  pop.style.top = `${r.bottom + 8}px`;
+  // 도구 막대 바깥쪽으로 띄운다: 막대가 위에 있으면 그 아래로, 아래에 있으면 그 위로.
+  const bar = $('toolbar').getBoundingClientRect();
+  const below = bar.bottom + 6;
+  const fits = below + pop.offsetHeight <= window.innerHeight - 8;
+  pop.style.top = `${fits ? below : Math.max(8, bar.top - 6 - pop.offsetHeight)}px`;
   pop.style.left = `${Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r.left + r.width / 2 - pop.offsetWidth / 2))}px`;
 }
 function hidePopover() {
@@ -334,7 +339,16 @@ function renderSettings() {
   $('opt-pressure').checked = settings.pressure;
   $('opt-swipe').checked = settings.swipeErase;
   for (const b of $('opt-smooth').children) b.setAttribute('aria-checked', String(Number(b.dataset.v) === settings.smooth));
+  for (const b of $('opt-bar').children) b.setAttribute('aria-checked', String(b.dataset.v === settings.barPos));
 }
+
+/** 도구 막대 위치를 반영한다. 아래에 둘 때는 문서가 상태 막대 밑까지 올라가므로 첫 페이지 위를 그만큼 비운다. */
+function applyBarPos() {
+  const bottom = settings.barPos !== 'top';
+  document.body.classList.toggle('bar-bottom', bottom);
+  viewer.setInset(bottom ? $('sat-probe').offsetHeight : 0);
+}
+window.addEventListener('resize', applyBarPos);
 function showSettingsPopover() {
   const pop = $('settings-pop');
   if (!pop.hidden) { hidePopover(); return; }
@@ -752,6 +766,15 @@ $('opt-swipe').addEventListener('change', (e) => {
   setSwipeErase(e.target.checked);
   if (e.target.checked) toast('손가락 지우개 모드 켬 — 가로로 쓸면 지우고, 세로는 스크롤');
 });
+for (const b of $('opt-bar').children) {
+  b.addEventListener('click', () => {
+    settings.barPos = b.dataset.v;
+    saveSettings();
+    applyBarPos();
+    renderSettings();
+    placePopover($('settings-pop'), $('settings-btn'));
+  });
+}
 $('refresh-btn').addEventListener('click', refreshApp);
 for (const b of $('opt-smooth').children) {
   b.addEventListener('click', () => { settings.smooth = Number(b.dataset.v); saveSettings(); renderSettings(); });
@@ -824,6 +847,7 @@ window.addEventListener('keydown', (e) => {
 
 // ── 시작 ────────────────────────────────────────────────
 setFinger(settings.finger);
+applyBarPos();
 renderTools();
 renderRecent();
 const standalone = navigator.standalone === true || matchMedia('(display-mode: standalone)').matches;
