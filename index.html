@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<title>PadNote — PDF 필기</title>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="description" content="아이패드에서 PDF 위에 필기하고 한 파일로 저장하는 웹앱. 모든 처리는 기기 안에서만 이루어집니다.">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="PadNote">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#fbfbfa" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1f1f21" media="(prefers-color-scheme: dark)">
+<meta name="format-detection" content="telephone=no">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="src/app.css">
+<link rel="modulepreload" href="vendor/pdfjs/pdf.min.mjs">
+</head>
+<body>
+
+<main id="home" class="screen">
+  <div class="home-inner">
+    <header class="home-head">
+      <img src="icons/icon.svg" alt="" width="64" height="64">
+      <h1>PadNote</h1>
+      <p>PDF 위에 필기하고, 원본과 필기를 한 파일로 저장합니다.<br>파일은 이 기기 밖으로 나가지 않습니다.</p>
+    </header>
+    <button id="open-btn" class="primary" type="button">PDF 열기</button>
+    <input id="file-input" type="file" accept="application/pdf,.pdf" hidden>
+    <section id="recent" hidden>
+      <h2>최근 문서</h2>
+      <div id="recent-list"></div>
+    </section>
+    <p id="install-tip" class="tip" hidden>공유 버튼 → <b>홈 화면에 추가</b>를 하면 전체 화면 앱으로 쓸 수 있고 오프라인에서도 열립니다.</p>
+  </div>
+</main>
+
+<div id="work" class="screen" hidden>
+  <div id="toolbar" role="toolbar" aria-label="도구">
+    <button class="ib" id="back-btn" type="button" title="문서 목록" aria-label="문서 목록" data-icon="back"></button>
+    <div id="doc-title"></div>
+    <div class="tb-mid">
+      <div class="seg" role="radiogroup" aria-label="필기 도구">
+        <button class="ib tool" type="button" role="radio" data-tool="pen" title="펜 (P)" aria-label="펜" data-icon="pen"></button>
+        <button class="ib tool" type="button" role="radio" data-tool="hl" title="형광펜 (H)" aria-label="형광펜" data-icon="hl"></button>
+        <button class="ib tool" type="button" role="radio" data-tool="eraser" title="획 지우개 (E)" aria-label="획 지우개" data-icon="eraser"></button>
+      </div>
+      <span class="sep"></span>
+      <div id="colors" role="radiogroup" aria-label="색"></div>
+      <button class="ib" id="size-btn" type="button" title="굵기" aria-label="굵기" aria-haspopup="true"><span id="size-dot"></span></button>
+      <span class="sep"></span>
+      <button class="ib" id="undo-btn" type="button" title="실행취소" aria-label="실행취소" data-icon="undo" disabled></button>
+      <button class="ib" id="redo-btn" type="button" title="다시실행" aria-label="다시실행" data-icon="redo" disabled></button>
+    </div>
+    <button class="ib" id="finger-btn" type="button" title="손가락으로 필기" aria-label="손가락으로 필기" aria-pressed="false" data-icon="finger"></button>
+    <button class="ib rec" id="rec-btn" type="button" title="필기 과정 녹화" aria-label="필기 과정 녹화" aria-pressed="false"><span class="rec-dot"></span><span id="rec-time"></span></button>
+    <button class="ib" id="play-btn" type="button" title="녹화 재생" aria-label="녹화 재생" data-icon="play"></button>
+    <button class="ib" id="export-btn" type="button" title="필기 포함 PDF로 저장" aria-label="필기 포함 PDF로 저장" data-icon="share"></button>
+  </div>
+
+  <div id="stage">
+    <div id="scroller" tabindex="-1"><div id="pages"></div></div>
+    <canvas id="live"></canvas>
+    <button id="page-pill" class="pill" type="button" title="페이지 이동"></button>
+    <div id="zoom-pill" class="pill">
+      <button type="button" id="zoom-out" aria-label="축소" data-icon="minus"></button>
+      <button type="button" id="zoom-val" title="폭에 맞춤">100%</button>
+      <button type="button" id="zoom-in" aria-label="확대" data-icon="plus"></button>
+    </div>
+    <div id="playbar" hidden>
+      <button class="ib" id="pb-toggle" type="button" aria-label="재생/일시정지" data-icon="play"></button>
+      <span id="pb-time">0:00</span>
+      <input id="pb-seek" type="range" min="0" max="1000" value="0" step="1" aria-label="재생 위치">
+      <span id="pb-total">0:00</span>
+      <button class="tb" id="pb-speed" type="button" title="배속">1×</button>
+      <button class="tb" id="pb-skip" type="button" aria-pressed="true" title="필기가 없는 구간 건너뛰기">빈 구간 건너뛰기</button>
+      <button class="ib" id="pb-clear" type="button" title="녹화 기록 지우기" aria-label="녹화 기록 지우기" data-icon="trash"></button>
+      <button class="ib" id="pb-close" type="button" title="재생 닫기" aria-label="재생 닫기" data-icon="close"></button>
+    </div>
+  </div>
+</div>
+
+<div id="size-pop" class="popover" hidden>
+  <div class="size-preview"><span id="size-sample"></span></div>
+  <input id="size-range" type="range" aria-label="굵기">
+  <div id="size-presets"></div>
+</div>
+
+<div id="busy" hidden><div class="spinner"></div><span id="busy-text"></span></div>
+<div id="toast" role="status" aria-live="polite"></div>
+
+<dialog id="dlg">
+  <form method="dialog">
+    <h3 id="dlg-title"></h3>
+    <p id="dlg-body"></p>
+    <input id="dlg-input" autocomplete="off" hidden>
+    <div id="dlg-actions"></div>
+  </form>
+</dialog>
+
+<script type="module" src="src/app.js"></script>
+</body>
+</html>
