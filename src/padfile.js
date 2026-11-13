@@ -16,6 +16,18 @@ const GS_NAME = 'PadNoteHL';
 const TAIL_RE =
   /%PadNote:1 o=(\d{12}) d=(\d{12}) n=(\d{12}) z=([01]) t=(\d{12})\r?\nstartxref\s+\d+\s+%%EOF\s*$/;
 
+// 첨부 데이터 맨 앞에 넣는 짧은 자기 설명. 이 파일을 처음 보는 사람이나 AI가
+// 별도 안내 없이도 필기 과정을 읽을 수 있게 한다.
+const ABOUT = {
+  about: '이 PDF 위에 쓴 필기의 전체 과정(획의 좌표와 시간)입니다. 시점별로 획을 다시 그리면 필기 과정을 재현할 수 있습니다.',
+  format: {
+    pages: '{ 쪽 번호(0부터): [획, ...] }',
+    stroke: "{ tool: 'pen'|'hl'(형광펜), color, size(굵기 pt), pts: [x, y, 필압, dt, x, y, 필압, dt, ...], t0?, deletedAt?, inst? }",
+    coords: '단위 pt. 화면에 보이는 페이지의 왼쪽 위가 원점, y는 아래 방향',
+    time: '단위 ms(녹화 타임라인). 점의 시각 = t0 + dt. t0 없음 = 녹화 전에 그린 획. deletedAt = 지운 시각. inst = t0에 한 번에 나타난 획. rec.duration = 전체 길이',
+  },
+};
+
 const latin1 = (bytes) => {
   let s = '';
   for (let i = 0; i < bytes.length; i += 8192) {
@@ -220,7 +232,7 @@ export async function buildExport(L, orig, { pages, notes, password, hlAlpha }) 
     snap.markRefForSave(page.ref);
   }
 
-  const json = new TextEncoder().encode(JSON.stringify({ ...notes, origLen: base.length }));
+  const json = new TextEncoder().encode(JSON.stringify({ ...ABOUT, ...notes, origLen: base.length }));
   const z = canDeflate;
   const data = z ? await pipe(new Blob([json]), new CompressionStream('deflate')) : json;
   const now = L.PDFString.fromDate(new Date());
@@ -231,7 +243,7 @@ export async function buildExport(L, orig, { pages, notes, password, hlAlpha }) 
     Type: 'Filespec',
     F: L.PDFString.of(DATA_NAME),
     UF: L.PDFHexString.fromText(DATA_NAME),
-    Desc: L.PDFString.of('PadNote handwriting data'),
+    Desc: L.PDFHexString.fromText('필기 과정 데이터(획 좌표와 시간). 형식은 JSON 안의 about·format 참고'),
     EF: { F: efRef, UF: efRef },
   }));
   attach(L, doc, DATA_NAME, specRef);

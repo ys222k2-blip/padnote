@@ -71,6 +71,7 @@ async function runCase(name, { password, expectSameBase = true } = {}) {
   const back = await readNotes(blob, info);
   assert.deepEqual(back.pages, JSON.parse(JSON.stringify(notes.pages)), '획 데이터 왕복');
   assert.equal(back.rec.duration, 3000);
+  assert.ok(back.about && back.format?.stroke && back.format?.time, '첨부 데이터에 형식 설명 포함');
 
   // 2) 변조 감지: 뒤에 바이트가 붙거나 잘리면 일반 PDF 취급
   assert.equal(await probe(new Blob([out, Buffer.from('\n1 0 obj\n<<>>\nendobj\n')])), null);
