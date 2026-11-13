@@ -736,7 +736,7 @@ $('settings-btn').addEventListener('click', showSettingsPopover);
 $('opt-pressure').addEventListener('change', (e) => { settings.pressure = e.target.checked; saveSettings(); });
 $('opt-swipe').addEventListener('change', (e) => {
   setSwipeErase(e.target.checked);
-  if (e.target.checked) toast('손가락 지우개 켬 — 가로로 쓸면 지우고, 세로는 스크롤');
+  if (e.target.checked) toast('손가락 지우개 모드 켬 — 가로로 쓸면 지우고, 세로는 스크롤');
 });
 $('refresh-btn').addEventListener('click', refreshApp);
 for (const b of $('opt-smooth').children) {
