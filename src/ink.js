@@ -6,9 +6,9 @@
 
 export const STRIDE = 4;
 export const HL_ALPHA = 0.38;
-const P_STEP = 0.04; // 필압 양자화 단위(굵기 구간을 묶어 경로 수를 줄인다)
+const P_LEVELS = 20; // 필압 양자화 단계 수(굵기 구간을 묶어 경로 수를 줄인다). 0.5 가 정확히 표현된다.
 
-export const quantP = (p) => Math.round(Math.min(1, Math.max(0, p)) / P_STEP) * P_STEP;
+export const quantP = (p) => Math.round(Math.min(1, Math.max(0, p)) * P_LEVELS) / P_LEVELS;
 export const round2 = (v) => Math.round(v * 100) / 100;
 
 export function pointCount(s) {
@@ -16,7 +16,7 @@ export function pointCount(s) {
 }
 
 function widthOf(s, p) {
-  return s.tool === 'hl' ? s.size : s.size * (0.4 + 1.2 * p);
+  return s.tool === 'hl' ? s.size : s.size * (0.55 + 0.9 * p); // p=0.5(필압 끔)이면 정확히 size
 }
 
 /**
@@ -132,7 +132,7 @@ export function bbox(s) {
     if (a[i + 1] < y0) y0 = a[i + 1];
     if (a[i + 1] > y1) y1 = a[i + 1];
   }
-  const m = (s.tool === 'hl' ? s.size : s.size * 1.6) / 2;
+  const m = (s.tool === 'hl' ? s.size : s.size * 1.45) / 2;
   b = [x0 - m, y0 - m, x1 + m, y1 + m];
   boxes.set(s, b);
   return b;

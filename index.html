@@ -57,6 +57,7 @@
     <button class="ib" id="finger-btn" type="button" title="손가락으로 필기" aria-label="손가락으로 필기" aria-pressed="false" data-icon="finger"></button>
     <button class="ib rec" id="rec-btn" type="button" title="필기 과정 녹화" aria-label="필기 과정 녹화" aria-pressed="false"><span class="rec-dot"></span><span id="rec-time"></span></button>
     <button class="ib" id="play-btn" type="button" title="녹화 재생" aria-label="녹화 재생" data-icon="play"></button>
+    <button class="ib" id="settings-btn" type="button" title="필기 설정" aria-label="필기 설정" aria-haspopup="true" data-icon="sliders"></button>
     <button class="ib" id="export-btn" type="button" title="필기 포함 PDF로 저장" aria-label="필기 포함 PDF로 저장" data-icon="share"></button>
   </div>
 
@@ -86,6 +87,22 @@
   <div class="size-preview"><span id="size-sample"></span></div>
   <input id="size-range" type="range" aria-label="굵기">
   <div id="size-presets"></div>
+</div>
+
+<div id="settings-pop" class="popover" hidden>
+  <label class="opt">
+    <span><b>필압 반영</b><small>누르는 세기로 굵기가 변합니다</small></span>
+    <input id="opt-pressure" type="checkbox" class="switch">
+  </label>
+  <div class="opt col">
+    <span><b>획 보정</b><small>자글거림과 손떨림을 줄입니다. 강할수록 선이 펜을 조금 늦게 따라옵니다</small></span>
+    <div id="opt-smooth" class="choice" role="radiogroup" aria-label="획 보정">
+      <button type="button" role="radio" data-v="0">끔</button>
+      <button type="button" role="radio" data-v="1">약</button>
+      <button type="button" role="radio" data-v="2">보통</button>
+      <button type="button" role="radio" data-v="3">강</button>
+    </div>
+  </div>
 </div>
 
 <div id="busy" hidden><div class="spinner"></div><span id="busy-text"></span></div>

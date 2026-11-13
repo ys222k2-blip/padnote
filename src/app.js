@@ -44,6 +44,7 @@ const ICONS = {
   plus: '<path d="M12 6v12M6 12h12"/>',
   minus: '<path d="M6 12h12"/>',
   close: '<path d="M6 6l12 12M18 6L6 18"/>',
+  sliders: '<path d="M4 7.5h8M17 7.5h3M4 16.5h3M12 16.5h8"/><circle cx="14.5" cy="7.5" r="2.5"/><circle cx="9.5" cy="16.5" r="2.5"/>',
   trash: '<path d="M5 7h14"/><path d="M10 7V4.5h4V7"/><path d="M7 7l.8 12.5h8.4L17 7"/>',
 };
 const icon = (name) =>
@@ -65,6 +66,8 @@ const settings = {
   pen: { color: PALETTE.pen[0], size: 1.6 },
   hl: { color: PALETTE.hl[0], size: 12 },
   finger: false,
+  pressure: false, // 필압을 굵기에 반영
+  smooth: 2, // 획 보정: 0 끔 · 1 약 · 2 보통 · 3 강
   speed: 1,
   skip: true,
   hinted: false,
@@ -108,6 +111,8 @@ const input = new Input(viewer, {
   getTool: () => ({ tool: settings.tool, ...(settings[settings.tool] || {}) }),
   getNotes: () => doc?.notes || null,
   fingerDraw: () => settings.finger,
+  pressure: () => settings.pressure,
+  smoothLevel: () => settings.smooth,
   locked: () => !!playback,
   onPen: () => {
     // 펜을 쓰기 시작하면 손바닥이 획을 남기지 않도록 손가락 필기를 끈다.
@@ -221,6 +226,7 @@ function renderHistory() {
 function showSizePopover() {
   const pop = $('size-pop');
   if (!pop.hidden) { hidePopover(); return; }
+  hidePopover();
   const tool = settings.tool;
   const cur = settings[tool];
   const range = SIZES[tool];
@@ -245,16 +251,35 @@ function showSizePopover() {
   }
   slider.oninput = () => { cur.size = Number(slider.value); saveSettings(); paint(); renderTools(); };
   paint();
+  placePopover(pop, $('size-btn'));
+}
+function placePopover(pop, anchor) {
   pop.hidden = false;
-  const r = $('size-btn').getBoundingClientRect();
+  const r = anchor.getBoundingClientRect();
   pop.style.top = `${r.bottom + 8}px`;
   pop.style.left = `${Math.max(8, Math.min(window.innerWidth - pop.offsetWidth - 8, r.left + r.width / 2 - pop.offsetWidth / 2))}px`;
 }
-function hidePopover() { $('size-pop').hidden = true; }
+function hidePopover() {
+  $('size-pop').hidden = true;
+  $('settings-pop').hidden = true;
+}
 document.addEventListener('pointerdown', (e) => {
-  const pop = $('size-pop');
-  if (!pop.hidden && !pop.contains(e.target) && !$('size-btn').contains(e.target)) hidePopover();
+  for (const [pop, btn] of [['size-pop', 'size-btn'], ['settings-pop', 'settings-btn']]) {
+    if (!$(pop).hidden && !$(pop).contains(e.target) && !$(btn).contains(e.target)) $(pop).hidden = true;
+  }
 }, true);
+
+function renderSettings() {
+  $('opt-pressure').checked = settings.pressure;
+  for (const b of $('opt-smooth').children) b.setAttribute('aria-checked', String(Number(b.dataset.v) === settings.smooth));
+}
+function showSettingsPopover() {
+  const pop = $('settings-pop');
+  if (!pop.hidden) { hidePopover(); return; }
+  hidePopover();
+  renderSettings();
+  placePopover(pop, $('settings-btn'));
+}
 
 // ── 문서 열기 ───────────────────────────────────────────
 class BlobTransport extends pdfjs.PDFDataRangeTransport {
@@ -659,6 +684,11 @@ $('finger-btn').addEventListener('click', () => {
   setFinger(!settings.finger);
   toast(settings.finger ? '손가락 필기 켬 — 두 손가락으로 이동·확대' : '손가락 필기 끔 — 한 손가락은 스크롤');
 });
+$('settings-btn').addEventListener('click', showSettingsPopover);
+$('opt-pressure').addEventListener('change', (e) => { settings.pressure = e.target.checked; saveSettings(); });
+for (const b of $('opt-smooth').children) {
+  b.addEventListener('click', () => { settings.smooth = Number(b.dataset.v); saveSettings(); renderSettings(); });
+}
 $('rec-btn').addEventListener('click', toggleRec);
 $('play-btn').addEventListener('click', enterPlayback);
 $('export-btn').addEventListener('click', exportPdf);

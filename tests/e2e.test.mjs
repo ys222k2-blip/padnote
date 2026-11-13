@@ -312,13 +312,55 @@ try {
   step = '터치: 펜';
   await state(tp, () => { __padnote.viewer.scroller.scrollTop = 0; });
   await tp.waitForTimeout(100);
-  await penEv('mousePressed', 200, 400, 0.1);
-  for (let i = 1; i <= 20; i++) await penEv('mouseMoved', 200 + i * 15, 400 + i * 2, 0.1 + i * 0.04);
-  await penEv('mouseReleased', 500, 440, 0);
-  const ps = await state(tp, () => { const s = __padnote.doc.notes.visible(0)[0]; const p = []; for (let i = 2; i < s.pts.length; i += 4) p.push(s.pts[i]); return { n: p.length, min: Math.min(...p), max: Math.max(...p), top: __padnote.viewer.scroller.scrollTop }; });
-  assert.ok(ps.n > 10 && ps.max - ps.min > 0.3, `필압이 기록됨(${ps.min}–${ps.max})`);
-  assert.equal(ps.top, 0, '펜은 스크롤하지 않음');
-  ok(`펜 = 필기, 필압 ${ps.min.toFixed(2)}–${ps.max.toFixed(2)}`);
+  const penLine = async () => {
+    await penEv('mousePressed', 200, 400, 0.1);
+    for (let i = 1; i <= 20; i++) await penEv('mouseMoved', 200 + i * 15, 400 + i * 2, 0.1 + i * 0.04);
+    await penEv('mouseReleased', 500, 440, 0);
+    return state(tp, () => { const s = __padnote.doc.notes.visible(0).at(-1); const p = []; for (let i = 2; i < s.pts.length; i += 4) p.push(s.pts[i]); return { n: p.length, min: Math.min(...p), max: Math.max(...p), top: __padnote.viewer.scroller.scrollTop }; });
+  };
+  const flat = await penLine();
+  assert.ok(flat.n > 10 && flat.min === 0.5 && flat.max === 0.5, `기본값은 필압 미반영(${flat.min}–${flat.max})`);
+  assert.equal(flat.top, 0, '펜은 스크롤하지 않음');
+  await tp.tap('#settings-btn');
+  await tp.tap('#opt-pressure');
+  await tp.tap('#settings-btn');
+  const ps = await penLine();
+  assert.ok(ps.max - ps.min > 0.3, `설정에서 켜면 필압이 기록됨(${ps.min}–${ps.max})`);
+  await tp.click('#undo-btn');
+  ok(`펜 = 필기, 필압은 설정에서 켤 때만 반영(${ps.min.toFixed(2)}–${ps.max.toFixed(2)})`);
+
+  step = '획 보정';
+  // 정수 픽셀로 양자화된 촘촘한 표본(완만한 사선) → 계단이 남지 않아야 한다.
+  const stair = async () => {
+    await penEv('mousePressed', 150, 700, 0.5);
+    for (let x = 151; x <= 550; x++) await penEv('mouseMoved', x, Math.round(700 + (x - 150) * 0.12), 0.5);
+    await penEv('mouseReleased', 550, 748, 0);
+    const r = await state(tp, () => {
+      const v = __padnote.viewer, s = __padnote.doc.notes.visible(0).at(-1), a = s.pts, pv = v.views[0];
+      const [x0, y0] = v.toPage(pv, 150, 700), [x1, y1] = v.toPage(pv, 550, 748);
+      const L = Math.hypot(x1 - x0, y1 - y0);
+      let dev = 0, turn = 0, prev = null;
+      for (let i = 0; i < a.length; i += 4) {
+        dev = Math.max(dev, Math.abs((a[i] - x0) * (y1 - y0) - (a[i + 1] - y0) * (x1 - x0)) / L * v.scale);
+        if (i) { const ang = Math.atan2(a[i + 1] - a[i - 3], a[i] - a[i - 4]); if (prev != null) turn += Math.abs(ang - prev); prev = ang; }
+      }
+      return { dev, turn: turn * 180 / Math.PI, endErr: Math.hypot(a.at(-4) - x1, a.at(-3) - y1) * v.scale, startErr: Math.hypot(a[0] - x0, a[1] - y0) * v.scale };
+    });
+    await tp.click('#undo-btn');
+    return r;
+  };
+  const smooth = await stair();
+  await tp.tap('#settings-btn');
+  await tp.tap('#opt-smooth [data-v="0"]');
+  await tp.tap('#settings-btn');
+  const rough = await stair();
+  await tp.tap('#settings-btn');
+  await tp.tap('#opt-smooth [data-v="2"]');
+  await tp.tap('#settings-btn');
+  assert.ok(smooth.turn < rough.turn / 3, `방향 떨림이 1/3 이하로(${smooth.turn.toFixed(0)}° vs ${rough.turn.toFixed(0)}°)`);
+  assert.ok(smooth.dev < 0.75, `이상적인 직선에서 벗어난 정도 ${smooth.dev.toFixed(2)}px`);
+  assert.ok(smooth.startErr < 0.05 && smooth.endErr < 0.05, '획의 시작과 끝은 펜 위치 그대로');
+  ok(`계단 입력의 방향 떨림 ${rough.turn.toFixed(0)}° → ${smooth.turn.toFixed(0)}°, 직선 이탈 ${smooth.dev.toFixed(2)}px`);
 
   step = '터치: 핀치';
   const before = await state(tp, () => ({ s: __padnote.viewer.scale, a: __padnote.viewer.anchorAt(410, 600) }));

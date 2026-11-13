@@ -10,7 +10,9 @@
 import { quantP, round2, hitStroke, pointCount, HL_ALPHA } from './ink.js';
 
 const ERASER_RADIUS = 11; // 화면 px
-const MIN_STEP = 0.55; // 점 간 최소 거리(화면 px)
+const MIN_STEP = 0.75; // 점 간 최소 거리(화면 px)
+const SMOOTH_PX = [0, 1.5, 3, 6]; // 획 보정 단계(끔·약·보통·강)별로 펜 뒤를 따라오는 거리(화면 px)
+const PRESSURE_PX = 8; // 필압이 굵기에 반영되는 데 걸리는 거리(화면 px)
 
 export class Input {
   /**
@@ -18,6 +20,8 @@ export class Input {
    * @param o.getTool   () → { tool:'pen'|'hl'|'eraser', color, size }
    * @param o.getNotes  () → Notes | null
    * @param o.fingerDraw () → boolean
+   * @param o.pressure   () → boolean (필압을 굵기에 반영할지)
+   * @param o.smoothLevel () → 0..3 (획 보정 단계)
    * @param o.locked    () → boolean (재생 중 등 편집 금지)
    * @param o.onPen     펜 입력을 처음 감지했을 때
    * @param o.onFingerBlocked 손가락으로 그으려 했지만 필기 모드가 아닐 때(안내용)
@@ -88,7 +92,7 @@ export class Input {
     } else {
       a.stroke = { tool: tool.tool, color: tool.color, size: tool.size, ...notes.stamp(), pts: [] };
       a.drawn = 0;
-      a.p = type === 'pen' ? (e.pressure || 0.25) : 0.5;
+      a.p = e.pressure || 0.25;
       this.viewer.liveAlpha(tool.tool === 'hl' ? HL_ALPHA : 1);
       this.addPoint(a, e, true);
       this.drawLive(a);
@@ -144,10 +148,41 @@ export class Input {
     }
   }
 
+  /**
+   * 점 하나를 획에 더한다.
+   * 화면 좌표는 (특히 iPad Safari 에서) 정수 픽셀로 들어오는데, 이를 촘촘히 그대로 이으면
+   * 계단 모양으로 자글거린다. 그래서 "지나온 거리" 기준의 2단 저역 필터로 다듬는다:
+   * 속도와 무관하게 펜 뒤를 SMOOTH_PX 만큼만 따라오므로 느린 획도 빠른 획도 같은 정도로 매끈해진다.
+   * 펜을 뗄 때(force)는 실제 위치까지 이어 획 끝이 짧아지지 않게 한다.
+   */
   addPoint(a, ev, force) {
     const { pv, stroke } = a;
     const s = this.viewer.scale;
-    let [x, y] = this.viewer.toPage(pv, ev.clientX, ev.clientY, a.rect);
+    const cx = ev.clientX, cy = ev.clientY;
+    const len = SMOOTH_PX[this.smoothLevel()] ?? SMOOTH_PX[2];
+    let moved = 0;
+    if (a.rx === undefined) {
+      a.f1x = a.f2x = cx; a.f1y = a.f2y = cy;
+    } else {
+      moved = Math.hypot(cx - a.rx, cy - a.ry);
+      if (force || len <= 0) {
+        a.f1x = a.f2x = cx; a.f1y = a.f2y = cy;
+      } else {
+        const k = 1 - Math.exp(-moved / (len / 2));
+        a.f1x += (cx - a.f1x) * k; a.f1y += (cy - a.f1y) * k;
+        a.f2x += (a.f1x - a.f2x) * k; a.f2y += (a.f1y - a.f2y) * k;
+      }
+    }
+    a.rx = cx; a.ry = cy;
+
+    let p = 0.5;
+    if (a.type === 'pen' && this.pressure()) {
+      const raw = ev.pressure > 0 ? ev.pressure : a.p; // 펜을 떼는 순간의 0 은 무시
+      a.p += (raw - a.p) * Math.max(0.08, 1 - Math.exp(-moved / PRESSURE_PX)); // 굵기가 출렁이지 않게 천천히 따라간다
+      p = a.p;
+    }
+
+    let [x, y] = this.viewer.toPage(pv, a.f2x, a.f2y, a.rect);
     x = Math.min(pv.w, Math.max(0, x));
     y = Math.min(pv.h, Math.max(0, y));
     const pts = stroke.pts;
@@ -156,12 +191,6 @@ export class Input {
       const dx = (x - pts[n - 4]) * s, dy = (y - pts[n - 3]) * s;
       const d2 = dx * dx + dy * dy;
       if (force ? d2 < 0.01 : d2 < MIN_STEP * MIN_STEP) return;
-    }
-    let p = 0.5;
-    if (a.type === 'pen') {
-      const raw = ev.pressure > 0 ? ev.pressure : a.p; // 펜을 떼는 순간의 0 은 무시
-      a.p += (raw - a.p) * 0.5; // 필압 떨림 완화
-      p = a.p;
     }
     const dt = Math.max(n ? pts[n - 1] : 0, Math.round(ev.timeStamp - a.stamp));
     pts.push(round2(x), round2(y), quantP(p), dt);
