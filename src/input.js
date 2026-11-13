@@ -9,7 +9,6 @@
 
 import { quantP, round2, hitStroke, pointCount, HL_ALPHA } from './ink.js';
 
-const ERASER_RADIUS = 11; // 화면 px
 const MIN_STEP = 0.75; // 점 간 최소 거리(화면 px)
 const SMOOTH_PX = [0, 1.5, 3, 6]; // 획 보정 단계(끔·약·보통·강)별로 펜 뒤를 따라오는 거리(화면 px)
 const SWIPE_SLOP = 10; // 손가락 지우개: 방향을 판정하기까지의 이동 거리(화면 px)
@@ -23,6 +22,7 @@ export class Input {
    * @param o.getTool   () → { tool:'pen'|'hl'|'eraser', color, size }
    * @param o.getNotes  () → Notes | null
    * @param o.fingerDraw () → boolean
+   * @param o.eraserRadius () → 지우개 반지름(화면 px)
    * @param o.swipeErase () → boolean (한 손가락 가로 쓸기를 지우개로 쓸지)
    * @param o.pressure   () → boolean (필압을 굵기에 반영할지)
    * @param o.smoothLevel () → 0..3 (획 보정 단계)
@@ -258,11 +258,12 @@ export class Input {
     const v = this.viewer;
     const notes = this.getNotes();
     v.liveAlpha(1);
-    v.liveCursor(ev.clientX, ev.clientY, ERASER_RADIUS);
-    const r = ERASER_RADIUS / v.scale;
+    const radius = this.eraserRadius();
+    v.liveCursor(ev.clientX, ev.clientY, radius);
+    const r = radius / v.scale;
     const from = a.last || { x: ev.clientX, y: ev.clientY };
     const dist = Math.hypot(ev.clientX - from.x, ev.clientY - from.y);
-    const steps = Math.min(24, Math.max(1, Math.ceil(dist / (ERASER_RADIUS * 0.7))));
+    const steps = Math.min(24, Math.max(1, Math.ceil(dist / (radius * 0.7))));
     const dirty = new Set();
     for (let k = 1; k <= steps; k++) {
       const cx = from.x + ((ev.clientX - from.x) * k) / steps;

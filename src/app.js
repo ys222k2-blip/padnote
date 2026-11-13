@@ -59,12 +59,14 @@ const PALETTE = {
 const SIZES = {
   pen: { min: 0.4, max: 8, step: 0.1, presets: [0.8, 1.6, 2.8, 4.5] },
   hl: { min: 4, max: 32, step: 1, presets: [8, 12, 18, 26] },
+  eraser: { min: 4, max: 40, step: 1, presets: [6, 11, 20, 32] }, // 반지름, 화면 px
 };
 const SPEEDS = [1, 2, 4, 8, 0.5];
 const settings = {
   tool: 'pen',
   pen: { color: PALETTE.pen[0], size: 1.6 },
   hl: { color: PALETTE.hl[0], size: 12 },
+  eraser: { size: 11 },
   finger: false,
   swipeErase: false, // 한 손가락 가로 쓸기를 지우개로
   pressure: false, // 필압을 굵기에 반영
@@ -112,6 +114,7 @@ const input = new Input(viewer, {
   getTool: () => ({ tool: settings.tool, ...(settings[settings.tool] || {}) }),
   getNotes: () => doc?.notes || null,
   fingerDraw: () => settings.finger,
+  eraserRadius: () => settings.eraser.size,
   swipeErase: () => settings.swipeErase,
   pressure: () => settings.pressure,
   smoothLevel: () => settings.smooth,
@@ -177,9 +180,17 @@ function renderTools() {
   const colors = $('colors');
   const drawing = tool !== 'eraser';
   colors.hidden = !drawing;
-  $('size-btn').hidden = !drawing;
-  if (!drawing) return;
+  const dot = $('size-dot');
+  const range = SIZES[tool];
   const cur = settings[tool];
+  const d = 5 + ((cur.size - range.min) / (range.max - range.min)) * 17;
+  dot.style.width = dot.style.height = `${d}px`;
+  dot.classList.toggle('ring', !drawing); // 지우개는 속이 빈 원으로 표시
+  dot.style.background = drawing ? cur.color : '';
+  dot.style.opacity = tool === 'hl' ? '0.6' : '1';
+  $('size-btn').title = drawing ? '굵기' : '지우개 크기';
+  $('size-btn').setAttribute('aria-label', $('size-btn').title);
+  if (!drawing) return;
   colors.textContent = '';
   for (const c of PALETTE[tool]) {
     const b = el('button', { type: 'button', className: 'sw', title: c });
@@ -198,13 +209,6 @@ function renderTools() {
   if (isCustom) custom.style.setProperty('--c', cur.color);
   pick.addEventListener('change', () => { cur.color = pick.value; saveSettings(); renderTools(); });
   colors.append(custom);
-
-  const dot = $('size-dot');
-  const range = SIZES[tool];
-  const d = 5 + ((cur.size - range.min) / (range.max - range.min)) * 17;
-  dot.style.width = dot.style.height = `${d}px`;
-  dot.style.background = cur.color;
-  dot.style.opacity = tool === 'hl' ? '0.6' : '1';
 }
 
 function setTool(tool) {
@@ -280,17 +284,27 @@ function showSizePopover() {
   const slider = $('size-range');
   Object.assign(slider, { min: range.min, max: range.max, step: range.step, value: cur.size });
   const sample = $('size-sample');
+  const erasing = tool === 'eraser';
+  sample.classList.toggle('ring', erasing);
   const paint = () => {
-    sample.style.height = `${Math.max(1, cur.size * 1.4)}px`;
-    sample.style.background = cur.color;
-    sample.style.opacity = tool === 'hl' ? String(HL_ALPHA + 0.25) : '1';
+    if (erasing) {
+      // 지우개는 화면에 닿는 실제 크기의 원으로 보여 준다.
+      sample.style.width = sample.style.height = `${cur.size * 2}px`;
+      sample.style.background = '';
+    } else {
+      sample.style.width = '';
+      sample.style.height = `${Math.max(1, cur.size * 1.4)}px`;
+      sample.style.background = cur.color;
+      sample.style.opacity = tool === 'hl' ? String(HL_ALPHA + 0.25) : '1';
+    }
     for (const b of presets.children) b.setAttribute('aria-checked', String(Number(b.dataset.v) === cur.size));
   };
   const presets = $('size-presets');
   presets.textContent = '';
   for (const v of range.presets) {
     const d = 5 + ((v - range.min) / (range.max - range.min)) * 17;
-    const b = el('button', { type: 'button', title: `${v}pt` }, el('i'));
+    const b = el('button', { type: 'button', title: erasing ? `${v}px` : `${v}pt` }, el('i'));
+    b.firstChild.classList.toggle('ring', erasing);
     b.dataset.v = String(v);
     b.firstChild.style.width = b.firstChild.style.height = `${d}px`;
     b.addEventListener('click', () => { cur.size = v; slider.value = v; saveSettings(); paint(); renderTools(); });
@@ -721,7 +735,7 @@ window.addEventListener('drop', (e) => {
 $('back-btn').addEventListener('click', async () => { await closeDoc(); showHome(); });
 for (const b of document.querySelectorAll('.tool')) {
   b.addEventListener('click', () => {
-    if (settings.tool === b.dataset.tool && b.dataset.tool !== 'eraser') showSizePopover();
+    if (settings.tool === b.dataset.tool) showSizePopover();
     else setTool(b.dataset.tool);
   });
 }

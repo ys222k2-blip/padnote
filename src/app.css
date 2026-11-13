@@ -37,7 +37,9 @@ html, body {
   margin: 0;
   overflow: hidden;
   overscroll-behavior: none;
-  background: var(--stage);
+  /* iOS 26 홈 화면 앱은 상태 막대 영역을 페이지 배경색으로 칠한다. 도구 막대와 같은 색이어야
+     위쪽이 얼룩져 보이지 않는다(작업 영역의 회색은 #stage 가 따로 칠한다). */
+  background: var(--bar);
   color: var(--fg);
   font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Segoe UI", system-ui, sans-serif;
   -webkit-user-select: none;
@@ -91,6 +93,8 @@ svg { display: block; }
 .doc-del svg { width: 16px; height: 16px; }
 .tip { color: var(--fg2); font-size: 13px; text-align: center; margin: 8px 0 0; }
 
+#work { background: var(--bar); }
+
 /* ── 도구 막대 ───────────────────────────────────────── */
 #toolbar {
   display: flex; align-items: center; gap: 2px; flex: none;
@@ -128,6 +132,7 @@ svg { display: block; }
 .sw.custom.set { background: var(--c); }
 .sw.custom input { position: absolute; inset: -4px; width: 140%; height: 140%; opacity: 0; cursor: pointer; }
 #size-dot { display: block; border-radius: 50%; background: var(--fg); }
+#size-dot.ring, #size-sample.ring, #size-presets i.ring { background: transparent !important; border: 1.5px solid var(--fg); opacity: 1 !important; }
 .rec { width: auto; min-width: 40px; padding: 0 9px; gap: 6px; grid-auto-flow: column; }
 .rec-dot { width: 16px; height: 16px; border-radius: 50%; border: 2px solid currentColor; position: relative; }
 .rec-dot::after { content: ""; position: absolute; inset: 2px; border-radius: 50%; background: var(--danger); }
@@ -198,7 +203,7 @@ body.playing .pill { bottom: calc(var(--sab) + 76px); }
   position: fixed; z-index: 20; width: 240px; padding: 14px; border-radius: 16px;
   background: var(--card); border: 1px solid var(--line); box-shadow: var(--shadow);
 }
-.size-preview { height: 44px; display: grid; place-items: center; }
+.size-preview { min-height: 44px; display: grid; place-items: center; }
 #size-sample { display: block; width: 150px; border-radius: 99px; background: var(--fg); }
 #size-range { width: 100%; accent-color: var(--accent); margin: 8px 0; touch-action: none; }
 #size-presets { display: flex; justify-content: space-between; }

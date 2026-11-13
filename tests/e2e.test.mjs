@@ -124,8 +124,23 @@ try {
   assert.equal(await visible(page), 1, '형광펜 추가까지 취소');
   await page.click('#redo-btn');
   assert.equal(await visible(page), 2);
+  // 지우개 크기: 획에서 20px 떨어진 곳을 지나가면 기본 크기(11px)로는 안 닿고, 키우면 닿는다
+  const pass = () => drag(page, [[330, 442], [520, 442]]); // 형광펜 획(y=420, 굵기 약 20px) 아래쪽
+  await pass();
+  assert.equal(await visible(page), 2, '기본 크기로는 닿지 않음');
+  await page.click('#size-btn');
+  await page.locator('#size-range').fill('32');
+  assert.equal(await state(page, () => document.getElementById('size-sample').offsetWidth), 64, '미리보기는 실제 지름');
+  await page.click('#size-btn');
+  await pass();
+  assert.equal(await visible(page), 1, '크게 하면 닿음');
+  await page.click('#undo-btn');
+  await page.click('#size-btn');
+  await page.click('#size-presets button:nth-child(2)');
+  await page.click('#size-btn');
+  assert.equal(await state(page, () => JSON.parse(localStorage.getItem('padnote.settings')).eraser.size), 11);
   await page.keyboard.press('p');
-  ok('지우기/실행취소/다시실행');
+  ok('지우기/실행취소/다시실행, 지우개 크기 조절');
 
   step = '내보내기';
   const exported = await exportTo(page, 'e2e-plain.pdf');
