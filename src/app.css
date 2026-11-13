@@ -224,6 +224,11 @@ body.playing .pill { bottom: calc(var(--sab) + 76px); }
 .choice { display: flex; background: var(--hover); border-radius: 10px; padding: 3px; gap: 2px; }
 .choice button { flex: 1; height: 34px; border-radius: 8px; font-size: 14px; font-weight: 600; }
 .choice button[aria-checked="true"] { background: var(--card); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2); color: var(--accent); }
+.opt-btn { text-align: left; padding: 12px 14px; border-radius: 12px; background: var(--hover); }
+.opt-btn b { display: block; font-size: 15px; color: var(--accent); }
+.opt-btn small { display: block; color: var(--fg2); font-size: 12px; margin-top: 2px; }
+/* 손가락 지우개: 세로 이동만 브라우저 스크롤로 넘기고 가로 이동은 앱이 받는다. */
+body.swipe-erase #scroller { touch-action: pan-y; }
 body.playing #settings-btn { opacity: 0.3; pointer-events: none; }
 
 #toast {

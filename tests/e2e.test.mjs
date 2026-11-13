@@ -362,6 +362,40 @@ try {
   assert.ok(smooth.startErr < 0.05 && smooth.endErr < 0.05, '획의 시작과 끝은 펜 위치 그대로');
   ok(`계단 입력의 방향 떨림 ${rough.turn.toFixed(0)}° → ${smooth.turn.toFixed(0)}°, 직선 이탈 ${smooth.dev.toFixed(2)}px`);
 
+  step = '터치: 손가락 지우개';
+  const nBefore = await visible(tp); // 앞 단계에서 그린 (200,400)→(500,440) 사선 하나
+  assert.equal(nBefore, 1);
+  const swipe = async (pts) => { await touch('touchStart', [pts[0]]); for (const q of pts.slice(1)) await touch('touchMove', [q]); await touch('touchEnd', []); await tp.waitForTimeout(250); };
+  const hLine = []; for (let x = 250; x <= 450; x += 10) hLine.push([x, 420]);
+  const vLine = []; for (let y = 800; y >= 500; y -= 15) vLine.push([350, y]);
+  await swipe(hLine);
+  assert.equal(await visible(tp), nBefore, '모드가 꺼져 있으면 가로 쓸기는 지우지 않음');
+  await state(tp, () => { __padnote.viewer.scroller.scrollTop = 0; });
+  await tp.tap('#settings-btn');
+  await tp.tap('#opt-swipe');
+  await tp.tap('#settings-btn');
+  await tp.waitForTimeout(700); // 펜 직후의 손바닥 보호 시간
+  await swipe(vLine);
+  const scrolled = await state(tp, () => __padnote.viewer.scroller.scrollTop);
+  assert.ok(scrolled > 150, `세로 쓸기는 스크롤(${scrolled})`);
+  assert.equal(await visible(tp), nBefore, '세로 쓸기는 지우지 않음');
+  await state(tp, () => { __padnote.viewer.scroller.scrollTop = 0; });
+  await tp.waitForTimeout(100);
+  await swipe(hLine);
+  assert.equal(await visible(tp), nBefore - 1, '가로 쓸기가 획을 지움');
+  assert.equal(await state(tp, () => __padnote.viewer.scroller.scrollTop), 0, '가로 쓸기는 스크롤하지 않음');
+  await tp.click('#undo-btn');
+  assert.equal(await visible(tp), nBefore, '실행취소로 복구');
+  // 펜을 쓴 직후에는 손바닥 오작동을 막기 위해 무시
+  await penEv('mousePressed', 600, 900, 0.3); await penEv('mouseMoved', 620, 905, 0.3); await penEv('mouseReleased', 620, 905, 0);
+  await swipe(hLine);
+  assert.equal(await visible(tp), nBefore + 1, '펜 직후의 가로 쓸기는 무시');
+  await tp.click('#undo-btn');
+  await tp.tap('#settings-btn');
+  await tp.tap('#opt-swipe');
+  await tp.tap('#settings-btn');
+  ok('가로 쓸기 = 지우개, 세로 = 스크롤, 펜 직후에는 무시');
+
   step = '터치: 핀치';
   const before = await state(tp, () => ({ s: __padnote.viewer.scale, a: __padnote.viewer.anchorAt(410, 600) }));
   await touch('touchStart', [[360, 600], [460, 600]]);
@@ -395,6 +429,16 @@ try {
   assert.equal(await visible(tp), 2, '핀치로 바뀐 손가락 획은 버려짐');
   ok('손가락 필기 토글, 두 손가락은 여전히 확대');
   await tp.screenshot({ path: path.join(outDir, 'e2e-touch.png') });
+
+  step = '새로고침';
+  await tp.waitForTimeout(900);
+  await tp.tap('#settings-btn');
+  await Promise.all([tp.waitForEvent('load'), tp.tap('#refresh-btn')]);
+  await tp.waitForSelector('#home:not([hidden]) #recent-list .doc');
+  await tp.tap('.doc-open');
+  await opened(tp);
+  assert.equal(await visible(tp), 2, '새로고침 뒤에도 필기 유지');
+  ok('설정의 새로고침 → 앱을 다시 불러오고 필기는 그대로');
   await tp.context().close();
 
   // ═══ 서비스워커(오프라인) ═══════════════════════════════
@@ -405,6 +449,16 @@ try {
   await sp.evaluate(() => navigator.serviceWorker.ready);
   await sp.waitForFunction(() => navigator.serviceWorker.controller, null, { timeout: 30000 });
   await sp.waitForFunction(async () => (await (await caches.open((await caches.keys())[0])).keys()).length > 150, null, { timeout: 60000 });
+  // 서비스워커가 있는 상태의 새로고침: 캐시된 앱 파일을 다시 받아 넣고 다시 불러온다
+  await sp.setInputFiles('#file-input', fx('plain.pdf'));
+  await opened(sp);
+  let refetched = 0;
+  sp.on('request', (r) => { if (/\/src\/app\.js$/.test(r.url())) refetched++; });
+  await sp.click('#settings-btn');
+  await Promise.all([sp.waitForEvent('load'), sp.click('#refresh-btn')]);
+  await sp.waitForSelector('#home:not([hidden])');
+  assert.ok(refetched >= 1, '새로고침이 앱 파일을 다시 받음');
+  assert.ok(await sp.evaluate(async () => (await (await caches.open((await caches.keys())[0])).keys()).length > 150), '캐시 유지');
   await ctx.setOffline(true);
   await sp.reload();
   await sp.setInputFiles('#file-input', fx('plain.pdf'));

@@ -66,6 +66,7 @@ const settings = {
   pen: { color: PALETTE.pen[0], size: 1.6 },
   hl: { color: PALETTE.hl[0], size: 12 },
   finger: false,
+  swipeErase: false, // 한 손가락 가로 쓸기를 지우개로
   pressure: false, // 필압을 굵기에 반영
   smooth: 2, // 획 보정: 0 끔 · 1 약 · 2 보통 · 3 강
   speed: 1,
@@ -111,6 +112,7 @@ const input = new Input(viewer, {
   getTool: () => ({ tool: settings.tool, ...(settings[settings.tool] || {}) }),
   getNotes: () => doc?.notes || null,
   fingerDraw: () => settings.finger,
+  swipeErase: () => settings.swipeErase,
   pressure: () => settings.pressure,
   smoothLevel: () => settings.smooth,
   locked: () => !!playback,
@@ -212,10 +214,55 @@ function setTool(tool) {
   renderTools();
 }
 
+// 손가락 필기와 손가락 지우개는 둘 다 한 손가락 동작을 쓰므로 한쪽을 켜면 다른 쪽을 끈다.
 function setFinger(on) {
   settings.finger = on;
+  if (on) settings.swipeErase = false;
   saveSettings();
-  $('finger-btn').setAttribute('aria-pressed', String(on));
+  renderFingerModes();
+}
+function setSwipeErase(on) {
+  settings.swipeErase = on;
+  if (on) settings.finger = false;
+  saveSettings();
+  renderFingerModes();
+}
+function renderFingerModes() {
+  $('finger-btn').setAttribute('aria-pressed', String(settings.finger));
+  $('opt-swipe').checked = settings.swipeErase;
+  document.body.classList.toggle('swipe-erase', settings.swipeErase && !settings.finger);
+}
+
+/** 캐시된 앱 파일을 최신으로 바꾸고 다시 불러온다(홈 화면 앱에는 브라우저의 새로고침 버튼이 없다). */
+async function refreshApp() {
+  hidePopover();
+  busy(true, '최신 버전 확인 중…');
+  try {
+    await flushSave();
+    if ('caches' in window) {
+      for (const name of await caches.keys()) {
+        if (!name.startsWith('padnote-')) continue;
+        const cache = await caches.open(name);
+        const reqs = (await cache.keys()).filter((r) => !new URL(r.url).pathname.includes('/vendor/'));
+        await Promise.all(reqs.map(async (r) => {
+          const res = await fetch(r.url, { cache: 'reload' });
+          if (res.ok) await cache.put(r, res);
+        }));
+      }
+    }
+    const reg = await navigator.serviceWorker?.getRegistration();
+    await reg?.update();
+    const sw = reg?.installing;
+    if (sw) {
+      await Promise.race([
+        new Promise((r) => sw.addEventListener('statechange', () => { if (sw.state === 'activated' || sw.state === 'redundant') r(); })),
+        new Promise((r) => setTimeout(r, 15000)),
+      ]);
+    }
+  } catch (err) {
+    console.warn('최신 버전을 받지 못했습니다(오프라인?). 캐시된 버전으로 다시 엽니다.', err);
+  }
+  location.reload();
 }
 
 function renderHistory() {
@@ -271,6 +318,7 @@ document.addEventListener('pointerdown', (e) => {
 
 function renderSettings() {
   $('opt-pressure').checked = settings.pressure;
+  $('opt-swipe').checked = settings.swipeErase;
   for (const b of $('opt-smooth').children) b.setAttribute('aria-checked', String(Number(b.dataset.v) === settings.smooth));
 }
 function showSettingsPopover() {
@@ -686,6 +734,11 @@ $('finger-btn').addEventListener('click', () => {
 });
 $('settings-btn').addEventListener('click', showSettingsPopover);
 $('opt-pressure').addEventListener('change', (e) => { settings.pressure = e.target.checked; saveSettings(); });
+$('opt-swipe').addEventListener('change', (e) => {
+  setSwipeErase(e.target.checked);
+  if (e.target.checked) toast('손가락 지우개 켬 — 가로로 쓸면 지우고, 세로는 스크롤');
+});
+$('refresh-btn').addEventListener('click', refreshApp);
 for (const b of $('opt-smooth').children) {
   b.addEventListener('click', () => { settings.smooth = Number(b.dataset.v); saveSettings(); renderSettings(); });
 }

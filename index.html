@@ -94,6 +94,10 @@
     <span><b>필압 반영</b><small>누르는 세기로 굵기가 변합니다</small></span>
     <input id="opt-pressure" type="checkbox" class="switch">
   </label>
+  <label class="opt">
+    <span><b>손가락 지우개</b><small>한 손가락을 가로로 쓸면 지우개, 세로는 스크롤</small></span>
+    <input id="opt-swipe" type="checkbox" class="switch">
+  </label>
   <div class="opt col">
     <span><b>획 보정</b><small>자글거림과 손떨림을 줄입니다. 강할수록 선이 펜을 조금 늦게 따라옵니다</small></span>
     <div id="opt-smooth" class="choice" role="radiogroup" aria-label="획 보정">
@@ -103,6 +107,7 @@
       <button type="button" role="radio" data-v="3">강</button>
     </div>
   </div>
+  <button id="refresh-btn" type="button" class="opt-btn"><b>새로고침</b><small>최신 버전을 받아 앱을 다시 불러옵니다</small></button>
 </div>
 
 <div id="busy" hidden><div class="spinner"></div><span id="busy-text"></span></div>

@@ -12,6 +12,9 @@ import { quantP, round2, hitStroke, pointCount, HL_ALPHA } from './ink.js';
 const ERASER_RADIUS = 11; // 화면 px
 const MIN_STEP = 0.75; // 점 간 최소 거리(화면 px)
 const SMOOTH_PX = [0, 1.5, 3, 6]; // 획 보정 단계(끔·약·보통·강)별로 펜 뒤를 따라오는 거리(화면 px)
+const SWIPE_SLOP = 10; // 손가락 지우개: 방향을 판정하기까지의 이동 거리(화면 px)
+const SWIPE_RATIO = 1.5; // 가로 이동이 세로의 이 배수 이상이면 지우개
+const PALM_MS = 500; // 펜을 쓴 직후 이 시간 동안은 손가락 지우개를 무시(손바닥 오작동 방지)
 const PRESSURE_PX = 8; // 필압이 굵기에 반영되는 데 걸리는 거리(화면 px)
 
 export class Input {
@@ -20,6 +23,7 @@ export class Input {
    * @param o.getTool   () → { tool:'pen'|'hl'|'eraser', color, size }
    * @param o.getNotes  () → Notes | null
    * @param o.fingerDraw () → boolean
+   * @param o.swipeErase () → boolean (한 손가락 가로 쓸기를 지우개로 쓸지)
    * @param o.pressure   () → boolean (필압을 굵기에 반영할지)
    * @param o.smoothLevel () → 0..3 (획 보정 단계)
    * @param o.locked    () → boolean (재생 중 등 편집 금지)
@@ -32,6 +36,8 @@ export class Input {
     this.el = viewer.scroller;
     this.active = null; // 진행 중인 획/지우기
     this.pinch = null;
+    this.cand = null; // 손가락 지우개 후보(아직 가로/세로를 판정하지 못한 터치)
+    this.lastPen = -1e9;
     this.pending = new Set(); // 지우개가 지나가며 숨긴 획(손을 뗄 때 확정)
     this.lastDown = { type: '', t: 0 };
     this.penSeen = false;
@@ -64,6 +70,7 @@ export class Input {
   // ── Pointer Events: 필기 ──────────────────────────────
   onDown(e) {
     this.lastDown = { type: e.pointerType, t: e.timeStamp };
+    if (e.pointerType === 'pen') this.lastPen = e.timeStamp;
     if (e.pointerType === 'pen' && !this.penSeen) { this.penSeen = true; this.onPen?.(); }
     const notes = this.getNotes();
     if (!notes || this.locked() || this.active || this.pinch) return;
@@ -71,8 +78,14 @@ export class Input {
     if (type === 'mouse') {
       if (e.button !== 0) return;
     } else if (type === 'touch') {
-      if (!this.fingerDraw()) return;
       if (!e.isPrimary) return;
+      if (!this.fingerDraw()) {
+        // 손가락 지우개: 일단 후보로만 두고, 움직인 방향을 보고 정한다(세로면 브라우저가 스크롤).
+        if (this.swipeErase() && e.timeStamp - this.lastPen > PALM_MS) {
+          this.cand = { id: e.pointerId, x: e.clientX, y: e.clientY };
+        }
+        return;
+      }
     } else if (type !== 'pen') {
       return;
     }
@@ -100,8 +113,10 @@ export class Input {
   }
 
   onMove(e) {
+    if (this.cand && e.pointerId === this.cand.id && !this.active) this.judgeSwipe(e);
     const a = this.active;
     if (!a || e.pointerId !== a.id) return;
+    if (a.type === 'pen') this.lastPen = e.timeStamp;
     const list = typeof e.getCoalescedEvents === 'function' ? e.getCoalescedEvents() : null;
     const events = list && list.length ? list : [e];
     if (a.erasing) {
@@ -112,14 +127,40 @@ export class Input {
     }
   }
 
+  /** 손가락 지우개 후보가 충분히 움직였으면 가로(지우개)인지 세로(스크롤)인지 정한다. */
+  judgeSwipe(e) {
+    const c = this.cand;
+    const dx = e.clientX - c.x, dy = e.clientY - c.y;
+    if (Math.hypot(dx, dy) < SWIPE_SLOP) return;
+    this.cand = null;
+    if (Math.abs(dx) < Math.abs(dy) * SWIPE_RATIO) return; // 세로: 스크롤
+    if (this.pinch || this.locked() || !this.getNotes() || e.timeStamp - this.lastPen < PALM_MS) return;
+    try { this.el.setPointerCapture(c.id); } catch { /* 무시 */ }
+    this.active = {
+      id: c.id, type: 'touch', erasing: true, rect: this.el.getBoundingClientRect(),
+      items: [], last: { x: c.x, y: c.y },
+    };
+  }
+
+  /** 지우개가 숨겨 둔 획을 확정하지 않고 되돌린다. */
+  restorePending(a) {
+    const pages = new Set(a.items.map((i) => i.page));
+    this.pending.clear();
+    for (const p of pages) this.viewer.redrawInk(p);
+  }
+
   onUp(e, cancelled) {
+    if (this.cand?.id === e.pointerId) this.cand = null;
     const a = this.active;
     if (!a || e.pointerId !== a.id) return;
     this.active = null;
+    if (a.type === 'pen') this.lastPen = e.timeStamp;
     try { this.el.releasePointerCapture(e.pointerId); } catch { /* 이미 해제됨 */ }
     const notes = this.getNotes();
     if (a.erasing) {
       this.viewer.liveClear();
+      // 손가락 지우개 도중 브라우저가 스크롤로 가져갔다면 지우지 않은 것으로 한다.
+      if (cancelled && a.type === 'touch') { this.restorePending(a); return; }
       const items = a.items;
       this.pending.clear();
       if (notes && items.length) notes.erase(items);
@@ -135,17 +176,14 @@ export class Input {
 
   /** 진행 중인 손가락 획을 버린다(두 번째 손가락이 닿아 핀치로 바뀔 때). */
   abort() {
+    this.cand = null;
     const a = this.active;
     if (!a) return;
     this.active = null;
     try { this.el.releasePointerCapture(a.id); } catch { /* 무시 */ }
     this.viewer.liveClear();
     this.viewer.liveAlpha(1);
-    if (a.erasing && this.pending.size) {
-      const pages = new Set(a.items.map((i) => i.page));
-      this.pending.clear();
-      for (const p of pages) this.viewer.redrawInk(p);
-    }
+    if (a.erasing && this.pending.size) this.restorePending(a);
   }
 
   /**
@@ -260,6 +298,7 @@ export class Input {
 
     if (fingers.length >= 2 && !stylus) {
       if (e.cancelable) e.preventDefault();
+      this.cand = null;
       if (this.active?.type === 'touch') this.abort();
       if (!this.pinch && fingers.length === 2) this.startPinch(fingers[0], fingers[1]);
       return;
