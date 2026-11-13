@@ -254,6 +254,7 @@ self.addEventListener('fetch', (event) => {
   const req = event.request;
   const url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== location.origin) return;
+  if (url.searchParams.has('v')) return; // 앱의 '새로고침'이 최신 파일을 직접 받는 요청: 캐시에 끼어들지 않는다
   event.respondWith((async () => {
     const cache = await caches.open(CACHE);
     const key = req.mode === 'navigate' ? new URL('./', self.registration.scope).href : req;

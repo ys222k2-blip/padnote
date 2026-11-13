@@ -250,9 +250,12 @@ async function refreshApp() {
         const cache = await caches.open(name);
         const reqs = (await cache.keys()).filter((r) => !new URL(r.url).pathname.includes('/vendor/'));
         await Promise.all(reqs.map(async (r) => {
-          const res = await fetch(r.url, { cache: 'reload' });
+          // 주소에 매번 다른 값을 붙여 중간 서버(CDN)에 남은 이전 파일이 아니라 방금 배포된 파일을 받는다.
+          const res = await fetch(`${r.url}${r.url.includes('?') ? '&' : '?'}v=${Date.now()}`, { cache: 'reload' });
           if (res.ok) await cache.put(r, res);
         }));
+        // 이전 버전의 서비스워커가 위 요청을 주소째 캐시에 넣었을 수 있으므로 치운다.
+        for (const r of await cache.keys()) if (new URL(r.url).searchParams.has('v')) await cache.delete(r);
       }
     }
     const reg = await navigator.serviceWorker?.getRegistration();
@@ -343,10 +346,14 @@ function renderSettings() {
 }
 
 /** 도구 막대 위치를 반영한다. 아래에 둘 때는 문서가 상태 막대 밑까지 올라가므로 첫 페이지 위를 그만큼 비운다. */
+const TOP_DROP = 18; // 위 배치: 색상 버튼이 상태 막대의 흐림 범위에 들지 않도록 도구 막대를 내리는 높이
+const START_GAP = 16; // 아래 배치: 문서를 처음 열었을 때 상태 막대와 첫 페이지 사이에 더 두는 여백
 function applyBarPos() {
   const bottom = settings.barPos !== 'top';
+  const sat = $('sat-probe').offsetHeight; // 상태 막대 높이(홈 화면 앱이 아니면 0)
   document.body.classList.toggle('bar-bottom', bottom);
-  viewer.setInset(bottom ? $('sat-probe').offsetHeight : 0);
+  document.documentElement.style.setProperty('--tb-drop', sat > 0 ? `${TOP_DROP}px` : '0px');
+  viewer.setInset(bottom && sat > 0 ? sat + START_GAP : 0);
 }
 window.addEventListener('resize', applyBarPos);
 function showSettingsPopover() {
